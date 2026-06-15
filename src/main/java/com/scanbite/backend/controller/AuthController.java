@@ -94,7 +94,51 @@ public class AuthController {
             "username", username,
             "email", u.getEmail() != null ? u.getEmail() : "",
             "mobileNumber", u.getMobileNumber() != null ? u.getMobileNumber() : "",
+            "fullName", u.getFullName() != null ? u.getFullName() : "",
+            "designation", u.getDesignation() != null ? u.getDesignation() : "",
+            "ownerPhoto", u.getOwnerPhoto() != null ? u.getOwnerPhoto() : "",
             "roles", roleNames
         ));
+    }
+
+    @PutMapping("/profile")
+    public ResponseEntity<?> updateProfile(@RequestBody Map<String, String> body, @RequestHeader(name = "Authorization", required = false) String header) {
+        if (header == null || !header.startsWith("Bearer ")) return ResponseEntity.badRequest().body("Missing Authorization header");
+        String token = header.substring(7);
+        if (!jwtProvider.validateToken(token)) return ResponseEntity.status(401).body("Invalid token");
+        String username = jwtProvider.getUsernameFromToken(token);
+        java.util.Optional<User> uOpt = userRepository.findByUsername(username);
+        if (uOpt.isEmpty()) return ResponseEntity.status(401).body("User not found");
+        User u = uOpt.get();
+        if (body.containsKey("fullName")) u.setFullName(body.get("fullName"));
+        if (body.containsKey("email")) u.setEmail(body.get("email"));
+        if (body.containsKey("mobileNumber")) u.setMobileNumber(body.get("mobileNumber"));
+        if (body.containsKey("designation")) u.setDesignation(body.get("designation"));
+        userRepository.save(u);
+        return ResponseEntity.ok(u);
+    }
+
+    @PostMapping(value = "/profile/photo", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> uploadProfilePhoto(@RequestParam("file") org.springframework.web.multipart.MultipartFile file, @RequestHeader(name = "Authorization", required = false) String header) throws java.io.IOException {
+        if (header == null || !header.startsWith("Bearer ")) return ResponseEntity.badRequest().body("Missing Authorization header");
+        String token = header.substring(7);
+        if (!jwtProvider.validateToken(token)) return ResponseEntity.status(401).body("Invalid token");
+        String username = jwtProvider.getUsernameFromToken(token);
+        java.util.Optional<User> uOpt = userRepository.findByUsername(username);
+        if (uOpt.isEmpty()) return ResponseEntity.status(401).body("User not found");
+        User u = uOpt.get();
+        if (file == null || file.isEmpty()) return ResponseEntity.badRequest().body("File is empty");
+        String uploadsBase = "uploads/owners/" + u.getId();
+        java.nio.file.Path dir = java.nio.file.Path.of(uploadsBase);
+        java.nio.file.Files.createDirectories(dir);
+        String filename = System.currentTimeMillis() + "-" + file.getOriginalFilename();
+        java.nio.file.Path target = dir.resolve(filename).toAbsolutePath();
+        try (var in = file.getInputStream()) {
+            java.nio.file.Files.copy(in, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+        String photoUrl = "/" + uploadsBase + "/" + filename;
+        u.setOwnerPhoto(photoUrl);
+        userRepository.save(u);
+        return ResponseEntity.ok(Map.of("ownerPhoto", photoUrl));
     }
 }

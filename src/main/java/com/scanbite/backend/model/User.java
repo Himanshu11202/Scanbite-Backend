@@ -26,6 +26,9 @@ public class User {
     @Column(unique = true)
     private String mobileNumber;
 
+    private String designation;
+    private String ownerPhoto;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "user_roles",
         joinColumns = @JoinColumn(name = "user_id"),
@@ -45,6 +48,10 @@ public class User {
     public void setEmail(String email) { this.email = email; }
     public String getMobileNumber() { return mobileNumber; }
     public void setMobileNumber(String mobileNumber) { this.mobileNumber = mobileNumber; }
+    public String getDesignation() { return designation; }
+    public void setDesignation(String designation) { this.designation = designation; }
+    public String getOwnerPhoto() { return ownerPhoto; }
+    public void setOwnerPhoto(String ownerPhoto) { this.ownerPhoto = ownerPhoto; }
     public Set<Role> getRoles() { return roles; }
     public void setRoles(Set<Role> roles) { this.roles = roles; }
 }

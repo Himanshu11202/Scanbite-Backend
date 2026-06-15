@@ -56,13 +56,13 @@ public class CafeController {
     }
 
     @PostMapping(value = "/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<CafeDto> uploadImage(@PathVariable Long id, @RequestPart("file") MultipartFile file) throws IOException {
+    public ResponseEntity<CafeDto> uploadImage(@PathVariable Long id, @RequestParam("file") MultipartFile file) throws IOException {
         Cafe cafe = cafeService.uploadImage(id, file);
         return ResponseEntity.ok(toDto(cafe));
     }
 
     @PostMapping(value = "/{id}/covers", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<CafeDto> uploadCovers(@PathVariable Long id, @RequestPart("files") java.util.List<MultipartFile> files) throws IOException {
+    public ResponseEntity<CafeDto> uploadCovers(@PathVariable Long id, @RequestParam("files") java.util.List<MultipartFile> files) throws IOException {
         Cafe cafe = cafeService.uploadCovers(id, files);
         return ResponseEntity.ok(toDto(cafe));
     }
