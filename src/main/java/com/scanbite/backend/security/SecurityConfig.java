@@ -39,6 +39,7 @@ public class SecurityConfig {
                 .requestMatchers("/ws/**").permitAll()
                 .requestMatchers("/uploads/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/menu/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/cafes/*").permitAll()
                 .anyRequest().authenticated()
             );
 
