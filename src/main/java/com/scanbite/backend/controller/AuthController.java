@@ -27,26 +27,48 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody Map<String, String> body) {
+        long start = System.currentTimeMillis();
+        System.out.println("[PERF] Register request received at " + start);
+
         String username = body.get("username");
         String email = body.get("email");
         String mobileNumber = body.get("mobileNumber");
         String password = body.get("password");
         
-        if (userRepository.findByUsername(username).isPresent()) {
+        long dbStart = System.currentTimeMillis();
+        boolean usernameExists = userRepository.existsByUsername(username);
+        System.out.println("[PERF] DB query checkUsername took " + (System.currentTimeMillis() - dbStart) + " ms");
+        if (usernameExists) {
             return ResponseEntity.badRequest().body("Username exists");
         }
-        if (email != null && !email.trim().isEmpty() && userRepository.findByUsernameOrEmailOrMobileNumber(email, email, email).isPresent()) {
-            return ResponseEntity.badRequest().body("Email already registered");
+
+        if (email != null && !email.trim().isEmpty()) {
+            long dbEmailStart = System.currentTimeMillis();
+            boolean emailExists = userRepository.existsByEmail(email);
+            System.out.println("[PERF] DB query checkEmail took " + (System.currentTimeMillis() - dbEmailStart) + " ms");
+            if (emailExists) {
+                return ResponseEntity.badRequest().body("Email already registered");
+            }
         }
-        if (mobileNumber != null && !mobileNumber.trim().isEmpty() && userRepository.findByUsernameOrEmailOrMobileNumber(mobileNumber, mobileNumber, mobileNumber).isPresent()) {
-            return ResponseEntity.badRequest().body("Mobile number already registered");
+
+        if (mobileNumber != null && !mobileNumber.trim().isEmpty()) {
+            long dbMobileStart = System.currentTimeMillis();
+            boolean mobileExists = userRepository.existsByMobileNumber(mobileNumber);
+            System.out.println("[PERF] DB query checkMobile took " + (System.currentTimeMillis() - dbMobileStart) + " ms");
+            if (mobileExists) {
+                return ResponseEntity.badRequest().body("Mobile number already registered");
+            }
         }
 
         User u = new User();
         u.setUsername(username);
         u.setEmail(email);
         u.setMobileNumber(mobileNumber);
+        
+        long encodeStart = System.currentTimeMillis();
         u.setPassword(passwordEncoder.encode(password));
+        System.out.println("[PERF] Password encode took " + (System.currentTimeMillis() - encodeStart) + " ms");
+        
         u.setFullName(body.getOrDefault("fullName", username));
 
         // Accept optional role field (SUPER_ADMIN, CAFE_ADMIN, CUSTOMER). Default to CUSTOMER.
@@ -57,24 +79,58 @@ public class AuthController {
             case "CAFE_ADMIN": roleName = "ROLE_CAFE_ADMIN"; break;
             default: roleName = "ROLE_CUSTOMER";
         }
+        
+        long roleDbStart = System.currentTimeMillis();
         Role r = roleRepository.findByName(roleName).orElseGet(() -> roleRepository.save(new Role(roleName)));
+        System.out.println("[PERF] DB query role lookup/save took " + (System.currentTimeMillis() - roleDbStart) + " ms");
+        
         u.getRoles().add(r);
+        
+        long saveStart = System.currentTimeMillis();
         userRepository.save(u);
+        System.out.println("[PERF] DB user save took " + (System.currentTimeMillis() - saveStart) + " ms");
+        
         java.util.Set<String> roleNames = u.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet());
-        return ResponseEntity.ok(Map.of("token", jwtProvider.generateToken(username, roleNames)));
+        
+        long jwtStart = System.currentTimeMillis();
+        String token = jwtProvider.generateToken(username, roleNames);
+        System.out.println("[PERF] JWT generation took " + (System.currentTimeMillis() - jwtStart) + " ms");
+        
+        System.out.println("[PERF] Register total duration: " + (System.currentTimeMillis() - start) + " ms");
+        return ResponseEntity.ok(Map.of("token", token));
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
+        long start = System.currentTimeMillis();
+        System.out.println("[PERF] Login request received at " + start);
+
         String username = body.get("username");
         String password = body.get("password");
-        return userRepository.findByUsernameOrEmailOrMobileNumber(username, username, username)
-                .map(u -> {
-                    if (passwordEncoder.matches(password, u.getPassword())) {
+        
+        long dbStart = System.currentTimeMillis();
+        var userOpt = userRepository.findByUsernameOrEmailOrMobileNumber(username, username, username);
+        System.out.println("[PERF] DB query findUser took " + (System.currentTimeMillis() - dbStart) + " ms");
+        
+        return userOpt.map(u -> {
+                    long encodeStart = System.currentTimeMillis();
+                    boolean matches = passwordEncoder.matches(password, u.getPassword());
+                    System.out.println("[PERF] Password encode match took " + (System.currentTimeMillis() - encodeStart) + " ms");
+                    if (matches) {
                         java.util.Set<String> roleNames = u.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet());
-                        return ResponseEntity.ok(Map.of("token", jwtProvider.generateToken(u.getUsername(), roleNames)));
-                    } else return ResponseEntity.status(401).body("Invalid credentials");
-                }).orElse(ResponseEntity.status(404).body("User not found"));
+                        long jwtStart = System.currentTimeMillis();
+                        String token = jwtProvider.generateToken(u.getUsername(), roleNames);
+                        System.out.println("[PERF] JWT generation took " + (System.currentTimeMillis() - jwtStart) + " ms");
+                        System.out.println("[PERF] Login total duration: " + (System.currentTimeMillis() - start) + " ms");
+                        return ResponseEntity.ok(Map.of("token", token));
+                    } else {
+                        System.out.println("[PERF] Login total duration (invalid credentials): " + (System.currentTimeMillis() - start) + " ms");
+                        return ResponseEntity.status(401).body("Invalid credentials");
+                    }
+                }).orElseGet(() -> {
+                    System.out.println("[PERF] Login total duration (user not found): " + (System.currentTimeMillis() - start) + " ms");
+                    return ResponseEntity.status(404).body("User not found");
+                });
     }
 
     @GetMapping("/validate")

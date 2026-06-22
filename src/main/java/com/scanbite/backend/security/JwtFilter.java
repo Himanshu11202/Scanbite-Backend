@@ -25,20 +25,33 @@ public class JwtFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        String header = request.getHeader("Authorization");
-        String token = null;
-        if (header != null && header.startsWith("Bearer ")) {
-            token = header.substring(7);
-        }
+        long startTime = System.currentTimeMillis();
+        System.out.println("START REQUEST: " + request.getMethod() + " " + request.getRequestURI() + " at " + startTime);
 
-        if (token != null && jwtProvider.validateToken(token)) {
-            String username = jwtProvider.getUsernameFromToken(token);
-            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-            UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-            auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(auth);
-        }
+        try {
+            String path = request.getRequestURI();
+            boolean isBypassed = path.equals("/api/auth/register") || path.equals("/api/auth/login") || path.equals("/api/health") || path.equals("/actuator/health");
 
-        filterChain.doFilter(request, response);
+            if (!isBypassed) {
+                String header = request.getHeader("Authorization");
+                String token = null;
+                if (header != null && header.startsWith("Bearer ")) {
+                    token = header.substring(7);
+                }
+
+                if (token != null && jwtProvider.validateToken(token)) {
+                    String username = jwtProvider.getUsernameFromToken(token);
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                    auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                }
+            }
+
+            filterChain.doFilter(request, response);
+        } finally {
+            long duration = System.currentTimeMillis() - startTime;
+            System.out.println("END REQUEST: " + request.getMethod() + " " + request.getRequestURI() + " took " + duration + " ms");
+        }
     }
 }
