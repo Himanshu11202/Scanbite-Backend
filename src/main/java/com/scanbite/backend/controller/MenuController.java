@@ -36,7 +36,12 @@ public class MenuController {
     }
 
     @GetMapping
-    public List<MenuItem> list() { return menuService.listAll(); }
+    public List<MenuItem> list(@RequestParam(value = "cafeId", required = false) Long cafeId) {
+        if (cafeId != null) {
+            return menuService.listByCafe(cafeId);
+        }
+        return menuService.listAll();
+    }
 
     @GetMapping("/category/{cat}")
     public List<MenuItem> byCategory(@PathVariable String cat) { return menuService.listByCategory(cat); }

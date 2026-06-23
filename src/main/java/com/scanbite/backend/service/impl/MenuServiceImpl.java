@@ -28,6 +28,9 @@ public class MenuServiceImpl implements MenuService {
     public List<MenuItem> listByCategory(String category) { return repo.findByCategory_Name(category); }
 
     @Override
+    public List<MenuItem> listByCafe(Long cafeId) { return repo.findByCafe_Id(cafeId); }
+
+    @Override
     public MenuItem getById(Long id) { return repo.findById(id).orElseThrow(() -> new ResourceNotFoundException("MenuItem", "id", id)); }
 
     @Override

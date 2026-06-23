@@ -9,6 +9,7 @@ import java.io.IOException;
 public interface MenuService {
     List<MenuItem> listAll();
     List<MenuItem> listByCategory(String category);
+    List<MenuItem> listByCafe(Long cafeId);
     MenuItem getById(Long id);
     MenuItem create(MenuItem item);
     MenuItem update(Long id, MenuItem patch);
