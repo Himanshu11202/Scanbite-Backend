@@ -7,6 +7,9 @@ import com.scanbite.backend.model.User;
 import com.scanbite.backend.repository.CafeRepository;
 import com.scanbite.backend.repository.UserRepository;
 import com.scanbite.backend.service.CafeService;
+import com.scanbite.backend.utils.FileUtils;
+import com.scanbite.backend.utils.SecurityUtils;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -26,6 +29,14 @@ public class CafeServiceImpl implements CafeService {
     public CafeServiceImpl(CafeRepository cafeRepository, UserRepository userRepository) {
         this.cafeRepository = cafeRepository;
         this.userRepository = userRepository;
+    }
+
+    private void validateCafeOwnership(Cafe cafe) {
+        if (SecurityUtils.isSuperAdmin()) return;
+        String currentUsername = SecurityUtils.getCurrentUsername();
+        if (currentUsername == null || cafe.getOwner() == null || !currentUsername.equals(cafe.getOwner().getUsername())) {
+            throw new AccessDeniedException("You are not authorized to perform operations on this cafe.");
+        }
     }
 
     @Override
@@ -51,6 +62,8 @@ public class CafeServiceImpl implements CafeService {
     public Cafe updateCafe(Long id, CafeDto dto) {
         Cafe cafe = cafeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cafe", "id", id));
+        validateCafeOwnership(cafe);
+        
         if (dto.getName() != null) cafe.setName(dto.getName());
         if (dto.getAddress() != null) cafe.setAddress(dto.getAddress());
         if (dto.getPhone() != null) cafe.setPhone(dto.getPhone());
@@ -67,7 +80,9 @@ public class CafeServiceImpl implements CafeService {
 
     @Override
     public void deleteCafe(Long id) {
-        if (!cafeRepository.existsById(id)) throw new ResourceNotFoundException("Cafe", "id", id);
+        Cafe cafe = cafeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Cafe", "id", id));
+        validateCafeOwnership(cafe);
         cafeRepository.deleteById(id);
     }
 
@@ -84,13 +99,19 @@ public class CafeServiceImpl implements CafeService {
     @Override
     public Cafe uploadImage(Long id, MultipartFile file) throws IOException {
         Cafe cafe = cafeRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Cafe", "id", id));
+        validateCafeOwnership(cafe);
+        
         if (file == null || file.isEmpty()) {
             return cafe;
         }
+        
+        FileUtils.validateImageFile(file);
+        
         String uploadsBase = "uploads/cafes/" + id;
         Path dir = Path.of(uploadsBase);
         Files.createDirectories(dir);
-        String filename = System.currentTimeMillis() + "-" + file.getOriginalFilename();
+        
+        String filename = System.currentTimeMillis() + "-" + FileUtils.sanitizeFilename(file.getOriginalFilename());
         Path target = dir.resolve(filename).toAbsolutePath();
         try (var in = file.getInputStream()) {
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
@@ -104,16 +125,23 @@ public class CafeServiceImpl implements CafeService {
     @Override
     public Cafe uploadCovers(Long id, List<MultipartFile> files) throws IOException {
         Cafe cafe = cafeRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Cafe", "id", id));
+        validateCafeOwnership(cafe);
+        
         if (files == null || files.isEmpty()) {
             return cafe;
         }
+        
         String uploadsBase = "uploads/cafes/" + id + "/covers";
         Path dir = Path.of(uploadsBase);
         Files.createDirectories(dir);
-        java.util.List<String> urls = new java.util.ArrayList<>();
+        List<String> urls = new java.util.ArrayList<>();
+        
         for (MultipartFile file : files) {
             if (file == null || file.isEmpty()) continue;
-            String filename = System.currentTimeMillis() + "-" + file.getOriginalFilename().replaceAll("\\s+", "_");
+            
+            FileUtils.validateImageFile(file);
+            
+            String filename = System.currentTimeMillis() + "-" + FileUtils.sanitizeFilename(file.getOriginalFilename());
             Path target = dir.resolve(filename).toAbsolutePath();
             try (var in = file.getInputStream()) {
                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);

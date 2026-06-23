@@ -5,11 +5,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,7 +15,7 @@ import java.util.Map;
 import com.scanbite.backend.model.CafeTable;
 import com.scanbite.backend.repository.CafeTableRepository;
 import com.scanbite.backend.repository.CafeRepository;
-import org.springframework.web.bind.annotation.*;
+import com.scanbite.backend.utils.SecurityUtils;
 
 @RestController
 @RequestMapping("/api/tables")
@@ -35,20 +33,53 @@ public class TableController {
         this.cafeRepository = cafeRepository;
     }
 
+    private void validateCafeOwnership(com.scanbite.backend.model.Cafe cafe) {
+        if (SecurityUtils.isSuperAdmin()) return;
+        String currentUsername = SecurityUtils.getCurrentUsername();
+        if (currentUsername == null || cafe.getOwner() == null || !currentUsername.equals(cafe.getOwner().getUsername())) {
+            throw new AccessDeniedException("You are not authorized to perform operations for this cafe.");
+        }
+    }
+
+    private void validateTableOwnership(Long tableId) {
+        CafeTable table = cafeTableRepository.findById(tableId)
+                .orElseThrow(() -> new com.scanbite.backend.exception.ResourceNotFoundException("CafeTable", "id", tableId));
+        validateCafeOwnership(table.getCafe());
+    }
+
     @GetMapping("/cafe/{cafeId}")
     public ResponseEntity<?> listByCafe(@PathVariable Long cafeId) {
         return ResponseEntity.ok(cafeTableRepository.findByCafe_Id(cafeId));
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
     public ResponseEntity<?> create(@RequestBody CafeTable table) {
         if (table.getCafe() == null || table.getCafe().getId() == null) {
             return ResponseEntity.badRequest().body("Cafe ID is required");
         }
+        
         com.scanbite.backend.model.Cafe cafe = cafeRepository.findById(table.getCafe().getId()).orElse(null);
         if (cafe == null) {
             return ResponseEntity.badRequest().body("Cafe not found");
         }
+        
+        validateCafeOwnership(cafe);
+
+        if (table.getTableNumber() == null || table.getTableNumber().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Table number is required");
+        }
+        
+        String cleanTableNum = table.getTableNumber().trim();
+        if (!cleanTableNum.matches("^\\d+$")) {
+            return ResponseEntity.badRequest().body("Table number must be numeric");
+        }
+
+        if (cafeTableRepository.existsByCafe_IdAndTableNumber(cafe.getId(), cleanTableNum)) {
+            return ResponseEntity.badRequest().body("Table number already exists in this cafe");
+        }
+
+        table.setTableNumber(cleanTableNum);
         table.setCafe(cafe);
         table.setStatus(com.scanbite.backend.model.TableStatus.AVAILABLE);
         CafeTable saved = cafeTableRepository.save(table);
@@ -56,14 +87,17 @@ public class TableController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
     public ResponseEntity<?> delete(@PathVariable Long id) {
-        if (!cafeTableRepository.existsById(id)) return ResponseEntity.notFound().build();
+        validateTableOwnership(id);
         cafeTableRepository.deleteById(id);
         return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
     public ResponseEntity<?> updateStatus(@PathVariable Long id, @RequestParam("status") String statusStr) {
+        validateTableOwnership(id);
         com.scanbite.backend.model.CafeTable table = cafeTableRepository.findById(id).orElse(null);
         if (table == null) return ResponseEntity.notFound().build();
         try {
@@ -76,7 +110,9 @@ public class TableController {
     }
 
     @PostMapping("/{id}/qr")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
     public ResponseEntity<?> generateQr(@PathVariable("id") Long id) {
+        validateTableOwnership(id);
         try {
             String publicUrl = cafeTableService.generateQrForTable(id);
             Map<String, String> body = new HashMap<>();
@@ -89,7 +125,9 @@ public class TableController {
     }
 
     @GetMapping("/{id}/qr/download")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
     public ResponseEntity<byte[]> downloadQr(@PathVariable("id") Long id) {
+        validateTableOwnership(id);
         try {
             byte[] image = cafeTableService.getQrImageForTable(id);
             HttpHeaders headers = new HttpHeaders();

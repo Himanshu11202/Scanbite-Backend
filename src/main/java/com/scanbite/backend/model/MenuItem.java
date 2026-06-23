@@ -3,7 +3,10 @@ package com.scanbite.backend.model;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "menu_items")
+@Table(name = "menu_items", indexes = {
+    @Index(name = "idx_menu_items_cafe_id", columnList = "cafe_id"),
+    @Index(name = "idx_menu_items_category_id", columnList = "category_id")
+})
 public class MenuItem {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

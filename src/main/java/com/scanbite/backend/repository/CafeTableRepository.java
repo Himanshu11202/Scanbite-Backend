@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface CafeTableRepository extends JpaRepository<CafeTable, Long> {
     List<CafeTable> findByCafe_Id(Long cafeId);
     Optional<CafeTable> findByQrCode(String qrCode);
+    boolean existsByCafe_IdAndTableNumber(Long cafeId, String tableNumber);
 }

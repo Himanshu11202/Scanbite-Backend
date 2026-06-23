@@ -9,7 +9,9 @@ import com.scanbite.backend.repository.CafeRepository;
 import com.scanbite.backend.repository.MenuCategoryRepository;
 import com.scanbite.backend.service.MenuService;
 import com.scanbite.backend.service.MenuScannerService;
+import com.scanbite.backend.utils.SecurityUtils;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -35,6 +37,14 @@ public class MenuController {
         this.menuCategoryRepository = menuCategoryRepository;
     }
 
+    private void validateCafeOwnership(Cafe cafe) {
+        if (SecurityUtils.isSuperAdmin()) return;
+        String currentUsername = SecurityUtils.getCurrentUsername();
+        if (currentUsername == null || cafe.getOwner() == null || !currentUsername.equals(cafe.getOwner().getUsername())) {
+            throw new AccessDeniedException("You are not authorized to perform operations for this cafe.");
+        }
+    }
+
     @GetMapping
     public List<MenuItem> list(@RequestParam(value = "cafeId", required = false) Long cafeId) {
         if (cafeId != null) {
@@ -51,21 +61,62 @@ public class MenuController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
-    public ResponseEntity<?> create(@RequestBody MenuItem item) { return ResponseEntity.ok(menuService.create(item)); }
+    public ResponseEntity<?> create(@RequestBody MenuItem item) {
+        if (item.getCafe() == null || item.getCafe().getId() == null) {
+            return ResponseEntity.badRequest().body("Cafe ID is required");
+        }
+        Cafe cafe = cafeRepository.findById(item.getCafe().getId())
+                .orElseThrow(() -> new com.scanbite.backend.exception.ResourceNotFoundException("Cafe", "id", item.getCafe().getId()));
+        validateCafeOwnership(cafe);
+
+        if (item.getName() == null || item.getName().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Menu item name is required");
+        }
+        if (item.getPrice() < 0) {
+            return ResponseEntity.badRequest().body("Price cannot be negative");
+        }
+        if (item.getSpicy() < 0 || item.getSpicy() > 5) {
+            return ResponseEntity.badRequest().body("Spicy level must be between 0 and 5");
+        }
+
+        return ResponseEntity.ok(menuService.create(item));
+    }
 
     @PostMapping(value = "/{id}/image", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
     public ResponseEntity<?> uploadImage(@PathVariable Long id, @org.springframework.web.bind.annotation.RequestPart("file") org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
+        MenuItem existing = menuService.getById(id);
+        validateCafeOwnership(existing.getCafe());
         return ResponseEntity.ok(menuService.uploadImage(id, file));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
-    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody MenuItem patch) { return ResponseEntity.ok(menuService.update(id, patch)); }
+    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody MenuItem patch) {
+        MenuItem existing = menuService.getById(id);
+        validateCafeOwnership(existing.getCafe());
+
+        if (patch.getName() != null && patch.getName().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Menu item name cannot be blank");
+        }
+        if (patch.getPrice() < 0) {
+            return ResponseEntity.badRequest().body("Price cannot be negative");
+        }
+        if (patch.getSpicy() < 0 || patch.getSpicy() > 5) {
+            return ResponseEntity.badRequest().body("Spicy level must be between 0 and 5");
+        }
+
+        return ResponseEntity.ok(menuService.update(id, patch));
+    }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
-    public ResponseEntity<?> delete(@PathVariable Long id) { menuService.delete(id); return ResponseEntity.noContent().build(); }
+    public ResponseEntity<?> delete(@PathVariable Long id) {
+        MenuItem existing = menuService.getById(id);
+        validateCafeOwnership(existing.getCafe());
+        menuService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
 
     @PostMapping(value = "/scan", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
@@ -85,6 +136,8 @@ public class MenuController {
         if (cafe == null) {
             return ResponseEntity.badRequest().body("Cafe not found");
         }
+        validateCafeOwnership(cafe);
+
         java.util.List<MenuItem> savedItems = new java.util.ArrayList<>();
         for (ScannedMenuItem itemDto : request.getItems()) {
             String catName = itemDto.getCategoryName();

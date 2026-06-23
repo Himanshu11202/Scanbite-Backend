@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -25,18 +26,21 @@ public class CafeController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
     public ResponseEntity<CafeDto> createCafe(@Valid @RequestBody CafeDto dto) {
         Cafe saved = cafeService.createCafe(dto);
         return new ResponseEntity<>(toDto(saved), HttpStatus.CREATED);
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
     public ResponseEntity<CafeDto> updateCafe(@PathVariable Long id, @RequestBody CafeDto dto) {
         Cafe updated = cafeService.updateCafe(id, dto);
         return ResponseEntity.ok(toDto(updated));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
     public ResponseEntity<Void> deleteCafe(@PathVariable Long id) {
         cafeService.deleteCafe(id);
         return ResponseEntity.noContent().build();
@@ -56,12 +60,14 @@ public class CafeController {
     }
 
     @PostMapping(value = "/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
     public ResponseEntity<CafeDto> uploadImage(@PathVariable Long id, @RequestParam("file") MultipartFile file) throws IOException {
         Cafe cafe = cafeService.uploadImage(id, file);
         return ResponseEntity.ok(toDto(cafe));
     }
 
     @PostMapping(value = "/{id}/covers", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
     public ResponseEntity<CafeDto> uploadCovers(@PathVariable Long id, @RequestParam("files") java.util.List<MultipartFile> files) throws IOException {
         Cafe cafe = cafeService.uploadCovers(id, files);
         return ResponseEntity.ok(toDto(cafe));

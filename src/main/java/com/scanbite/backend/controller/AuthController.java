@@ -5,6 +5,7 @@ import com.scanbite.backend.repository.UserRepository;
 import com.scanbite.backend.repository.RoleRepository;
 import com.scanbite.backend.model.Role;
 import com.scanbite.backend.security.JwtProvider;
+import com.scanbite.backend.utils.FileUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -34,6 +35,21 @@ public class AuthController {
         String email = body.get("email");
         String mobileNumber = body.get("mobileNumber");
         String password = body.get("password");
+
+        // Validate Input Fields
+        if (email != null && !email.trim().isEmpty()) {
+            if (!email.matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
+                return ResponseEntity.badRequest().body("Invalid email format");
+            }
+        }
+        if (mobileNumber != null && !mobileNumber.trim().isEmpty()) {
+            if (!mobileNumber.matches("^\\d{10}$")) {
+                return ResponseEntity.badRequest().body("Mobile number must be a 10-digit number");
+            }
+        }
+        if (password == null || password.length() < 8) {
+            return ResponseEntity.badRequest().body("Password must be at least 8 characters long");
+        }
         
         long dbStart = System.currentTimeMillis();
         boolean usernameExists = userRepository.existsByUsername(username);
@@ -184,10 +200,17 @@ public class AuthController {
         if (uOpt.isEmpty()) return ResponseEntity.status(401).body("User not found");
         User u = uOpt.get();
         if (file == null || file.isEmpty()) return ResponseEntity.badRequest().body("File is empty");
+        
+        try {
+            FileUtils.validateImageFile(file);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+
         String uploadsBase = "uploads/owners/" + u.getId();
         java.nio.file.Path dir = java.nio.file.Path.of(uploadsBase);
         java.nio.file.Files.createDirectories(dir);
-        String filename = System.currentTimeMillis() + "-" + file.getOriginalFilename();
+        String filename = System.currentTimeMillis() + "-" + FileUtils.sanitizeFilename(file.getOriginalFilename());
         java.nio.file.Path target = dir.resolve(filename).toAbsolutePath();
         try (var in = file.getInputStream()) {
             java.nio.file.Files.copy(in, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);

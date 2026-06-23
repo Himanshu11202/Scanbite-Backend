@@ -4,6 +4,7 @@ import com.scanbite.backend.exception.ResourceNotFoundException;
 import com.scanbite.backend.model.MenuItem;
 import com.scanbite.backend.repository.MenuItemRepository;
 import com.scanbite.backend.service.MenuService;
+import com.scanbite.backend.utils.FileUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -57,11 +58,14 @@ public class MenuServiceImpl implements MenuService {
     public MenuItem uploadImage(Long id, MultipartFile file) throws IOException {
         MenuItem existing = getById(id);
         if (file == null || file.isEmpty()) return existing;
+        
+        FileUtils.validateImageFile(file);
+        
         String uploads = "uploads/menu/" + id;
         Path dir = Paths.get(uploads);
         if (!Files.exists(dir)) Files.createDirectories(dir);
-        String original = file.getOriginalFilename();
-        String filename = System.currentTimeMillis() + "_" + (original != null ? original.replaceAll("\\s+", "_") : "image");
+        
+        String filename = System.currentTimeMillis() + "_" + FileUtils.sanitizeFilename(file.getOriginalFilename());
         Path target = dir.resolve(filename);
         Files.copy(file.getInputStream(), target);
         existing.setImageUrl("/uploads/menu/" + id + "/" + filename);
