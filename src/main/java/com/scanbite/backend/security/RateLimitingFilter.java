@@ -39,6 +39,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         // Target: auth routes (login, register) and file uploads
         boolean shouldLimit = path.equals("/api/auth/login") || 
                               path.equals("/api/auth/register") || 
+                              path.equals("/api/auth/guest-auth") || 
                               path.contains("/image") || 
                               path.contains("/covers") || 
                               path.equals("/api/auth/profile/photo");

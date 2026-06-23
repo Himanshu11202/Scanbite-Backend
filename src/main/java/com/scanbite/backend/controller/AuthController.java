@@ -116,6 +116,41 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("token", token));
     }
 
+    @PostMapping("/guest-auth")
+    public ResponseEntity<?> guestAuth(@RequestBody Map<String, String> body) {
+        long start = System.currentTimeMillis();
+        String phone = body.get("phone");
+        String name = body.get("name");
+        
+        if (phone == null || phone.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Phone number is required");
+        }
+        
+        String cleanPhone = phone.trim();
+        String cleanName = name != null ? name.trim() : "Guest";
+        
+        // Find existing user or create a new one
+        User u = userRepository.findByUsername(cleanPhone).orElseGet(() -> {
+            User newUser = new User();
+            newUser.setUsername(cleanPhone);
+            newUser.setFullName(cleanName);
+            newUser.setMobileNumber(cleanPhone);
+            // Default password to cleanPhone
+            newUser.setPassword(passwordEncoder.encode(cleanPhone));
+            
+            Role r = roleRepository.findByName("ROLE_CUSTOMER")
+                    .orElseGet(() -> roleRepository.save(new Role("ROLE_CUSTOMER")));
+            newUser.getRoles().add(r);
+            return userRepository.save(newUser);
+        });
+        
+        java.util.Set<String> roleNames = u.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet());
+        String token = jwtProvider.generateToken(u.getUsername(), roleNames);
+        
+        System.out.println("[PERF] Guest auth total duration: " + (System.currentTimeMillis() - start) + " ms");
+        return ResponseEntity.ok(Map.of("token", token));
+    }
+
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
         long start = System.currentTimeMillis();

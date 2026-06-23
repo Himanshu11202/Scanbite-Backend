@@ -79,6 +79,11 @@ public class MenuController {
             return ResponseEntity.badRequest().body("Spicy level must be between 0 and 5");
         }
 
+        if (item.getCategory() != null && item.getCategory().getId() != null) {
+            MenuCategory cat = menuCategoryRepository.findById(item.getCategory().getId()).orElse(null);
+            item.setCategory(cat);
+        }
+
         return ResponseEntity.ok(menuService.create(item));
     }
 
@@ -104,6 +109,13 @@ public class MenuController {
         }
         if (patch.getSpicy() < 0 || patch.getSpicy() > 5) {
             return ResponseEntity.badRequest().body("Spicy level must be between 0 and 5");
+        }
+
+        if (patch.getCategory() != null && patch.getCategory().getId() != null) {
+            MenuCategory cat = menuCategoryRepository.findById(patch.getCategory().getId()).orElse(null);
+            patch.setCategory(cat);
+        } else {
+            patch.setCategory(null);
         }
 
         return ResponseEntity.ok(menuService.update(id, patch));
