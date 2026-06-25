@@ -173,7 +173,9 @@ public class OrderController {
         }
         order.setItems(items);
         order.setSubtotal(subtotal);
-        order.setTotal(subtotal);
+        double calculatedTax = subtotal * 0.05;
+        order.setTax(calculatedTax);
+        order.setTotal(subtotal + calculatedTax);
         order.setPaid(false);
         order.setStatus(OrderStatus.PENDING);
         order.setCreatedAt(OffsetDateTime.now());
@@ -191,6 +193,19 @@ public class OrderController {
         try { messagingTemplate.convertAndSend("/topic/orders", updated); } catch (Exception e) {}
         return ResponseEntity.ok(updated);
     }
+    @PutMapping("/{id}/confirm")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
+    public ResponseEntity<?> confirmOrder(@PathVariable Long id, @RequestParam("prepTime") int prepTime) {
+        validateOrderAccess(id);
+        OrderEntity o = orderService.getById(id);
+        o.setStatus(OrderStatus.PREPARING);
+        o.setPrepTimeMinutes(prepTime);
+        o.setConfirmedAt(OffsetDateTime.now());
+        OrderEntity updated = orderRepository.save(o);
+        try { messagingTemplate.convertAndSend("/topic/orders", updated); } catch (Exception e) {}
+        return ResponseEntity.ok(updated);
+    }
+
 
     @PutMapping("/{id}/paid")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")

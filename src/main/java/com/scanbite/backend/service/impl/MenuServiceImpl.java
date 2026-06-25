@@ -48,6 +48,7 @@ public class MenuServiceImpl implements MenuService {
         existing.setVeg(patch.isVeg());
         existing.setSpicy(patch.getSpicy());
         existing.setAvailable(patch.isAvailable());
+        existing.setPopular(patch.isPopular());
         return repo.save(existing);
     }
 

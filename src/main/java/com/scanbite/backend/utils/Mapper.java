@@ -9,13 +9,14 @@ public class Mapper {
         MenuItemDto d = new MenuItemDto();
         d.id = e.getId(); d.name = e.getName(); d.description = e.getDescription(); d.price = e.getPrice();
         d.veg = e.isVeg(); d.spicy = e.getSpicy(); d.imageUrl = e.getImageUrl(); d.category = e.getCategory() == null ? null : e.getCategory().getName();
+        d.popular = e.isPopular();
         return d;
     }
 
     public static MenuItem toEntity(MenuItemDto d) {
         if (d == null) return null;
         MenuItem e = new MenuItem(); e.setName(d.name); e.setDescription(d.description); e.setPrice(d.price);
-        e.setVeg(d.veg); e.setSpicy(d.spicy); e.setImageUrl(d.imageUrl);
+        e.setVeg(d.veg); e.setSpicy(d.spicy); e.setImageUrl(d.imageUrl); e.setPopular(d.popular);
         e.setCategory(null); // category mapping should be handled by service layer (attach MenuCategory entity)
         return e;
     }

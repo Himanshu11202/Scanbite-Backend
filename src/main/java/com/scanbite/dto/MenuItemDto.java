@@ -19,4 +19,6 @@ public class MenuItemDto {
 
     @NotNull
     private Long categoryId;
+
+    private boolean popular;
 }

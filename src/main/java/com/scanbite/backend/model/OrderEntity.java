@@ -35,6 +35,9 @@ public class OrderEntity {
     private double tax;
     private double total;
 
+    private Integer prepTimeMinutes;
+    private java.time.OffsetDateTime confirmedAt;
+
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -63,6 +66,10 @@ public class OrderEntity {
     public void setTotal(double total) { this.total = total; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
+    public Integer getPrepTimeMinutes() { return prepTimeMinutes; }
+    public void setPrepTimeMinutes(Integer prepTimeMinutes) { this.prepTimeMinutes = prepTimeMinutes; }
+    public java.time.OffsetDateTime getConfirmedAt() { return confirmedAt; }
+    public void setConfirmedAt(java.time.OffsetDateTime confirmedAt) { this.confirmedAt = confirmedAt; }
     public List<OrderItem> getItems() { return items; }
     public void setItems(List<OrderItem> items) { this.items = items; }
 }

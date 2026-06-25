@@ -5,6 +5,7 @@ import com.scanbite.backend.model.Cafe;
 import com.scanbite.backend.model.MenuCategory;
 import com.scanbite.backend.dto.BatchSaveRequest;
 import com.scanbite.backend.dto.ScannedMenuItem;
+import com.scanbite.backend.dto.MenuScanResponse;
 import com.scanbite.backend.repository.CafeRepository;
 import com.scanbite.backend.repository.MenuCategoryRepository;
 import com.scanbite.backend.service.MenuService;
@@ -81,7 +82,16 @@ public class MenuController {
 
         if (item.getCategory() != null && item.getCategory().getId() != null) {
             MenuCategory cat = menuCategoryRepository.findById(item.getCategory().getId()).orElse(null);
-            item.setCategory(cat);
+            if (cat != null) {
+                boolean duplicate = menuService.listByCafe(cafe.getId()).stream()
+                        .anyMatch(x -> x.getCategory() != null 
+                                && x.getCategory().getId().equals(cat.getId()) 
+                                && x.getName().equalsIgnoreCase(item.getName().trim()));
+                if (duplicate) {
+                    return ResponseEntity.badRequest().body("Menu item with name '" + item.getName() + "' already exists in category '" + cat.getName() + "'");
+                }
+                item.setCategory(cat);
+            }
         }
 
         return ResponseEntity.ok(menuService.create(item));
@@ -111,6 +121,19 @@ public class MenuController {
             return ResponseEntity.badRequest().body("Spicy level must be between 0 and 5");
         }
 
+        String newName = patch.getName() != null ? patch.getName().trim() : existing.getName();
+        Long catId = (patch.getCategory() != null) ? patch.getCategory().getId() : (existing.getCategory() != null ? existing.getCategory().getId() : null);
+        if (catId != null) {
+            boolean duplicate = menuService.listByCafe(existing.getCafe().getId()).stream()
+                .anyMatch(x -> !x.getId().equals(id) 
+                    && x.getCategory() != null 
+                    && x.getCategory().getId().equals(catId) 
+                    && x.getName().equalsIgnoreCase(newName));
+            if (duplicate) {
+                return ResponseEntity.badRequest().body("Another item with name '" + newName + "' already exists in this category");
+            }
+        }
+
         if (patch.getCategory() != null && patch.getCategory().getId() != null) {
             MenuCategory cat = menuCategoryRepository.findById(patch.getCategory().getId()).orElse(null);
             patch.setCategory(cat);
@@ -134,7 +157,10 @@ public class MenuController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','CAFE_ADMIN')")
     public ResponseEntity<?> scanMenu(@RequestParam("file") MultipartFile file) {
         try {
-            List<ScannedMenuItem> result = menuScannerService.scanMenu(file);
+            MenuScanResponse result = menuScannerService.scanMenu(file);
+            if (!result.isMenuDetected()) {
+                return ResponseEntity.badRequest().body("No menu detected in this image. Please upload a clear menu photo.");
+            }
             return ResponseEntity.ok(result);
         } catch (IOException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -149,6 +175,44 @@ public class MenuController {
             return ResponseEntity.badRequest().body("Cafe not found");
         }
         validateCafeOwnership(cafe);
+
+        // 1. Validate empty names & negative prices
+        for (ScannedMenuItem itemDto : request.getItems()) {
+            if (itemDto.getName() == null || itemDto.getName().trim().isEmpty()) {
+                return ResponseEntity.badRequest().body("Menu item name cannot be empty in batch request");
+            }
+            if (itemDto.getPrice() < 0) {
+                return ResponseEntity.badRequest().body("Price cannot be negative in batch request");
+            }
+        }
+
+        // 2. Validate duplicates in the request items list itself
+        java.util.Set<String> uniqueKeys = new java.util.HashSet<>();
+        for (ScannedMenuItem itemDto : request.getItems()) {
+            String key = (itemDto.getCategoryName() != null ? itemDto.getCategoryName().trim().toLowerCase() : "uncategorized") + ":" + itemDto.getName().trim().toLowerCase();
+            if (!uniqueKeys.add(key)) {
+                return ResponseEntity.badRequest().body("Duplicate item '" + itemDto.getName() + "' in category '" + itemDto.getCategoryName() + "' found in the request.");
+            }
+        }
+
+        // 3. Validate duplicates against the database
+        for (ScannedMenuItem itemDto : request.getItems()) {
+            String finalCatName = (itemDto.getCategoryName() != null ? itemDto.getCategoryName().trim() : "Uncategorized");
+            MenuCategory category = menuCategoryRepository.findByCafe_IdOrderBySortOrder(cafe.getId())
+                .stream()
+                .filter(c -> c.getName().equalsIgnoreCase(finalCatName))
+                .findFirst()
+                .orElse(null);
+            if (category != null) {
+                boolean duplicateInDb = menuService.listByCafe(cafe.getId()).stream()
+                    .anyMatch(x -> x.getCategory() != null 
+                        && x.getCategory().getId().equals(category.getId()) 
+                        && x.getName().equalsIgnoreCase(itemDto.getName().trim()));
+                if (duplicateInDb) {
+                    return ResponseEntity.badRequest().body("Item '" + itemDto.getName() + "' already exists in category '" + finalCatName + "' in the database");
+                }
+            }
+        }
 
         java.util.List<MenuItem> savedItems = new java.util.ArrayList<>();
         for (ScannedMenuItem itemDto : request.getItems()) {
@@ -170,7 +234,7 @@ public class MenuController {
                 });
 
             MenuItem item = new MenuItem();
-            item.setName(itemDto.getName());
+            item.setName(itemDto.getName().trim());
             item.setPrice(itemDto.getPrice());
             item.setVeg(itemDto.isVeg());
             item.setDescription(itemDto.getDescription());

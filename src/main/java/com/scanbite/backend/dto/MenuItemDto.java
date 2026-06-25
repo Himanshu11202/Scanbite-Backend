@@ -9,4 +9,5 @@ public class MenuItemDto {
     public int spicy;
     public String imageUrl;
     public String category;
+    public boolean popular;
 }

@@ -19,6 +19,7 @@ public class MenuItem {
     private int spicy;
     private String imageUrl;
     private Boolean available = true;
+    private boolean popular = false;
 
     @ManyToOne
     @JoinColumn(name = "category_id")
@@ -45,6 +46,8 @@ public class MenuItem {
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public boolean isAvailable() { return available == null || available; }
     public void setAvailable(Boolean available) { this.available = available; }
+    public boolean isPopular() { return popular; }
+    public void setPopular(boolean popular) { this.popular = popular; }
     public MenuCategory getCategory() { return category; }
     public void setCategory(MenuCategory category) { this.category = category; }
     public Cafe getCafe() { return cafe; }
